@@ -436,7 +436,10 @@
 
             <!-- ID Proof Section -->
             <div class="p-6 rounded-lg bg-text-light/50 border border-tertiary-highlight/50 shadow-md">
-                <h2 class="text-xl font-semibold text-tertiary-highlight mb-4">Main Guest ID Proof</h2>
+                <h2 class="text-xl font-semibold text-tertiary-highlight mb-4">
+                    Main Guest ID Proof
+                    <span id="main-guest-returning-indicator" class="text-sm text-secondary-accent ml-2 hidden">(Returning Guest)</span>
+                </h2>
                 <div class="grid md:grid-cols-2 gap-6">
                     <div>
                         <label for="id-proof-type" class="block text-sm font-medium text-gray-700 mb-1">ID Proof Type</label>
@@ -451,11 +454,15 @@
                         </select>
                     </div>
                     <div>
-                        <label for="id-proof-file" class="block text-sm font-medium text-gray-700 mb-1">Upload ID Proof Document</label>
+                        <label for="id-proof-file" class="block text-sm font-medium text-gray-700 mb-1">
+                            Upload ID Proof Document
+                            <span id="main-guest-file-optional" class="text-xs text-tertiary-highlight ml-1 hidden">(Optional - Already on file)</span>
+                        </label>
                         <input type="file" id="id-proof-file" name="id_proof_file" required 
                                accept=".jpg,.jpeg,.png,.pdf"
                                class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-tertiary-highlight/20 file:text-tertiary-highlight hover:file:bg-tertiary-highlight/30 transition duration-150">
                         <p class="text-xs text-gray-500 mt-1">JPG, PNG or PDF (max 2MB)</p>
+                        <p id="main-guest-id-status" class="text-xs text-tertiary-highlight mt-1 hidden">✓ ID proof already uploaded in previous registration</p>
                     </div>
                 </div>
             </div>
@@ -609,10 +616,17 @@
         const confirmPreviousGuestsBtn = document.getElementById('confirm-previous-guests');
         const phoneNumberInput = document.getElementById('phone-number');
         const phoneCheckStatus = document.getElementById('phone-check-status');
+        const mainGuestReturningIndicator = document.getElementById('main-guest-returning-indicator');
+        const mainGuestFileOptional = document.getElementById('main-guest-file-optional');
+        const mainGuestIdStatus = document.getElementById('main-guest-id-status');
+        const idProofFileInput = document.getElementById('id-proof-file');
+        const idProofTypeSelect = document.getElementById('id-proof-type');
         
         let coGuestCounter = 0;
         let previousCoGuests = [];
         let selectedPreviousGuests = [];
+        let isMainGuestReturning = false;
+        let mainGuestPreviousData = null;
 
         // =================================================================
         // UTILITY FUNCTIONS
@@ -722,10 +736,14 @@
             const nameValue = guestData ? guestData.name : '';
             const phoneValue = guestData ? guestData.phone_number : '';
             const idTypeValue = guestData ? guestData.id_proof_type : '';
+            const isReturningGuest = !!guestData; // True if this is a returning guest
             
             const content = `
                 <div class="flex justify-between items-center">
-                    <h3 class="text-lg font-semibold text-tertiary-highlight">Co-Guest ${currentCount}</h3>
+                    <h3 class="text-lg font-semibold text-tertiary-highlight">
+                        Co-Guest ${currentCount}
+                        ${isReturningGuest ? '<span class="text-sm text-secondary-accent ml-2">(Returning Guest)</span>' : ''}
+                    </h3>
                     <button type="button" onclick="removeCoGuest(${currentCount})" class="text-primary-dark hover:text-secondary-accent transition duration-150">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
@@ -757,12 +775,16 @@
                         </select>
                     </div>
                     <div>
-                        <label for="co-guest-id-file-${currentCount}" class="block text-sm font-medium text-gray-700 mb-1">Upload ID Proof Document</label>
-                        <input type="file" id="co-guest-id-file-${currentCount}" name="co_guest_id_file_${currentCount}" ${guestData ? '' : 'required'}
+                        <label for="co-guest-id-file-${currentCount}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Upload ID Proof Document
+                            ${isReturningGuest ? '<span class="text-xs text-tertiary-highlight ml-1">(Optional - Already on file)</span>' : ''}
+                        </label>
+                        <input type="file" id="co-guest-id-file-${currentCount}" name="co_guest_id_file_${currentCount}" 
+                               ${isReturningGuest ? '' : 'required'}
                                accept=".jpg,.jpeg,.png,.pdf"
                                class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-tertiary-highlight/20 file:text-tertiary-highlight hover:file:bg-tertiary-highlight/30 transition duration-150">
                         <p class="text-xs text-gray-500 mt-1">JPG, PNG or PDF (max 2MB)</p>
-                        ${guestData ? '<p class="text-xs text-tertiary-highlight">ID already uploaded in previous registration</p>' : ''}
+                        ${isReturningGuest ? '<p class="text-xs text-tertiary-highlight mt-1">✓ ID proof already uploaded in previous registration</p>' : ''}
                     </div>
                 </div>
             `;
@@ -829,7 +851,7 @@
         }
 
         // =================================================================
-        // RETURNING GUEST HANDLING
+        // RETURNING GUEST HANDLING - UPDATED FOR MAIN GUEST
         // =================================================================
 
         /**
@@ -845,6 +867,8 @@
 
             try {
                 previousCoGuests = [];
+                mainGuestPreviousData = null;
+                isMainGuestReturning = false;
                 const seenPhones = new Set();
 
                 // Get ALL registrations at once
@@ -873,6 +897,11 @@
                     if (String(registration.phone_number) === String(phoneNumber)) {
                         console.log('✅ Found as main guest in registration:', registration.reg_id);
                         foundGuest = true;
+                        isMainGuestReturning = true;
+                        mainGuestPreviousData = {
+                            id_proof_type: registration.id_proof_type,
+                            id_proof_url: registration.id_proof_url
+                        };
                     }
                     
                     // Check co-guests
@@ -905,12 +934,44 @@
 
                 console.log('📋 Final previous co-guests count:', previousCoGuests.length);
                 console.log('📋 Guest found status:', foundGuest);
+                console.log('📋 Main guest returning:', isMainGuestReturning);
+                console.log('📋 Main guest previous data:', mainGuestPreviousData);
 
-                return foundGuest && previousCoGuests.length > 0;
+                return foundGuest;
 
             } catch (error) {
                 console.error('❌ Error in checkReturningGuest:', error);
                 return false;
+            }
+        }
+
+        /**
+         * Updates the main guest form for returning guests
+         */
+        function updateMainGuestForm() {
+            if (isMainGuestReturning && mainGuestPreviousData) {
+                console.log('🔄 Updating main guest form for returning guest');
+                
+                // Show returning guest indicator
+                mainGuestReturningIndicator.classList.remove('hidden');
+                
+                // Set the ID proof type if available
+                if (mainGuestPreviousData.id_proof_type) {
+                    idProofTypeSelect.value = mainGuestPreviousData.id_proof_type;
+                }
+                
+                // Update file input to be optional
+                idProofFileInput.required = false;
+                mainGuestFileOptional.classList.remove('hidden');
+                mainGuestIdStatus.classList.remove('hidden');
+                
+                showMessage('Welcome back! Your ID proof is already on file.', 'success');
+            } else {
+                // Reset to default for new guests
+                mainGuestReturningIndicator.classList.add('hidden');
+                mainGuestFileOptional.classList.add('hidden');
+                mainGuestIdStatus.classList.add('hidden');
+                idProofFileInput.required = true;
             }
         }
 
@@ -988,6 +1049,10 @@
             if (phoneNumber.length !== 10) {
                 phoneCheckStatus.classList.add('hidden');
                 returningGuestSection.classList.add('hidden');
+                // Reset main guest form
+                isMainGuestReturning = false;
+                mainGuestPreviousData = null;
+                updateMainGuestForm();
                 return;
             }
             
@@ -1001,22 +1066,36 @@
                 console.log('📞 Phone check result:', isReturningGuest);
                 
                 if (isReturningGuest) {
-                    displayPreviousCoGuests();
+                    updateMainGuestForm();
+                    if (previousCoGuests.length > 0) {
+                        displayPreviousCoGuests();
+                    } else {
+                        phoneCheckStatus.textContent = 'Returning guest - no previous co-guests found';
+                        phoneCheckStatus.className = 'text-xs mt-1 text-tertiary-highlight';
+                    }
                 } else {
                     phoneCheckStatus.textContent = 'New guest - no previous registrations found';
                     phoneCheckStatus.className = 'text-xs mt-1 text-gray-600';
                     returningGuestSection.classList.add('hidden');
+                    // Ensure main guest form is reset
+                    isMainGuestReturning = false;
+                    mainGuestPreviousData = null;
+                    updateMainGuestForm();
                 }
             } catch (error) {
                 console.error('❌ Error checking returning guest:', error);
                 phoneCheckStatus.textContent = 'Error checking previous registrations';
                 phoneCheckStatus.className = 'text-xs mt-1 text-red-600';
                 returningGuestSection.classList.add('hidden');
+                // Reset main guest form on error
+                isMainGuestReturning = false;
+                mainGuestPreviousData = null;
+                updateMainGuestForm();
             }
         }
 
         // =================================================================
-        // REGISTRATION HANDLER
+        // REGISTRATION HANDLER - FIXED TO NOT RE-ASK ID PROOFS FOR RETURNING GUESTS
         // =================================================================
 
         async function handleRegistration(event) {
@@ -1030,54 +1109,64 @@
             const istTime = getISTTimeString();
             const phoneNumber = form['phone_number'].value;
 
-            if (!file) {
+            // For returning main guest, file is optional
+            if (!isMainGuestReturning && !file) {
                 showMessage('Please upload an ID Proof document for the main guest.', 'error');
                 toggleLoading(false);
                 return;
             }
 
-            if (!validateFileSize(file)) {
+            // Validate file size if a file is uploaded
+            if (file && !validateFileSize(file)) {
                 toggleLoading(false);
                 return;
             }
 
             try {
-                // 1. Upload Main Guest File
-                const fileExtension = file.name.split('.').pop();
-                const storagePath = `guest_reg_uploads/${regId}.${fileExtension}`;
+                let idProofUrl = '';
 
-                const { data: uploadData, error: uploadError } = await storage
-                    .from('id-proofs')
-                    .upload(storagePath, file, {
-                        cacheControl: '3600',
-                        upsert: false
-                    });
+                // 1. Upload Main Guest File only if provided and guest is not returning
+                if (file && !isMainGuestReturning) {
+                    const fileExtension = file.name.split('.').pop();
+                    const storagePath = `guest_reg_uploads/${regId}.${fileExtension}`;
 
-                if (uploadError) {
-                    console.error('Storage Upload Error:', uploadError);
-                    showMessage(`File upload failed: ${uploadError.message}`, 'error');
-                    toggleLoading(false);
-                    return;
+                    const { data: uploadData, error: uploadError } = await storage
+                        .from('id-proofs')
+                        .upload(storagePath, file, {
+                            cacheControl: '3600',
+                            upsert: false
+                        });
+
+                    if (uploadError) {
+                        console.error('Storage Upload Error:', uploadError);
+                        showMessage(`File upload failed: ${uploadError.message}`, 'error');
+                        toggleLoading(false);
+                        return;
+                    }
+
+                    // Get Public URL for new file
+                    const { data: publicUrlData } = storage.from('id-proofs').getPublicUrl(storagePath);
+                    idProofUrl = publicUrlData.publicUrl;
+                } else if (isMainGuestReturning && mainGuestPreviousData) {
+                    // Use existing ID proof URL for returning guest
+                    idProofUrl = mainGuestPreviousData.id_proof_url;
+                    console.log('✅ Using existing ID proof for main guest:', idProofUrl);
                 }
 
-                // 2. Get Public URL
-                const { data: publicUrlData } = storage.from('id-proofs').getPublicUrl(storagePath);
-                const idProofUrl = publicUrlData.publicUrl;
-
-                // 3. Collect Co-Guest Data
+                // 2. Collect Co-Guest Data
                 const coGuests = [];
                 
-                // Add selected previous guests
+                // Add selected previous guests (WITH THEIR EXISTING ID PROOF DATA)
                 selectedPreviousGuests.forEach(guest => {
                     coGuests.push({
                         name: guest.name,
                         phone_number: guest.phone_number,
                         id_proof_type: guest.id_proof_type,
-                        id_proof_url: guest.id_proof_url
+                        id_proof_url: guest.id_proof_url // Keep existing URL
                     });
                 });
                 
-                // Add new co-guests
+                // Add new co-guests (these will need file uploads)
                 const coGuestForms = document.querySelectorAll('.co-guest-form');
                 coGuestForms.forEach((form, index) => {
                     const formNumber = index + 1;
@@ -1088,7 +1177,7 @@
                     
                     if (!nameInput || !phoneInput || !typeSelect) return;
                     
-                    // Skip if this is a previous guest
+                    // Check if this is a previous guest (already added above)
                     const isPreviousGuest = selectedPreviousGuests.some(g => g.phone_number === phoneInput.value);
                     if (isPreviousGuest) return;
                     
@@ -1105,18 +1194,30 @@
                             name: nameInput.value,
                             phone_number: phoneInput.value,
                             id_proof_type: typeSelect.value
-                            // File will be uploaded separately below
+                            // id_proof_url will be added after file upload below
                         });
+                    } else {
+                        // New co-guest but no file uploaded - show error
+                        showMessage(`Please upload ID proof for co-guest: ${nameInput.value}`, 'error');
+                        toggleLoading(false);
+                        throw new Error('Missing file for new co-guest');
                     }
                 });
 
-                // 4. Upload Co-Guest Files
+                // 3. Upload Co-Guest Files ONLY FOR NEW CO-GUESTS
                 for (let i = 0; i < coGuests.length; i++) {
                     const coGuest = coGuests[i];
+                    
+                    // Skip if this co-guest already has an ID proof URL (returning guest)
+                    if (coGuest.id_proof_url) {
+                        console.log(`Skipping file upload for returning co-guest: ${coGuest.name}`);
+                        continue;
+                    }
+                    
+                    // Only upload files for new co-guests (no existing id_proof_url)
                     const fileInput = document.getElementById(`co-guest-id-file-${i + 1}`);
                     
-                    // Only upload files for new co-guests (previous guests already have URLs)
-                    if (fileInput && fileInput.files[0] && !coGuest.id_proof_url) {
+                    if (fileInput && fileInput.files[0]) {
                         const coGuestFile = fileInput.files[0];
                         const coGuestFileExtension = coGuestFile.name.split('.').pop();
                         const coGuestStoragePath = `guest_reg_uploads/${regId}_co${i + 1}.${coGuestFileExtension}`;
@@ -1140,7 +1241,7 @@
                     }
                 }
                 
-                // 5. Insert Record
+                // 4. Insert Record
                 const { error: insertError } = await supabaseClient
                     .from('guests')
                     .insert({
@@ -1170,14 +1271,19 @@
                     coGuestContainer.innerHTML = '';
                     selectedPreviousGuests = [];
                     previousCoGuests = [];
+                    isMainGuestReturning = false;
+                    mainGuestPreviousData = null;
+                    updateMainGuestForm();
                     addCoGuest(); // Add first co-guest form back
                     returningGuestSection.classList.add('hidden');
                     phoneCheckStatus.classList.add('hidden');
                 }
 
             } catch (error) {
-                console.error('An unexpected error occurred:', error);
-                showMessage('An unexpected error occurred during registration.', 'error');
+                if (error.message !== 'Missing file for new co-guest') {
+                    console.error('An unexpected error occurred:', error);
+                    showMessage('An unexpected error occurred during registration.', 'error');
+                }
             } finally {
                 toggleLoading(false);
             }
@@ -1378,6 +1484,10 @@
                 if (this.value.length !== 10) {
                     phoneCheckStatus.classList.add('hidden');
                     returningGuestSection.classList.add('hidden');
+                    // Reset main guest form
+                    isMainGuestReturning = false;
+                    mainGuestPreviousData = null;
+                    updateMainGuestForm();
                 }
             });
 
